@@ -1,4 +1,5 @@
 # 260220_command.md
+to cline+claude 4.6
 
 ## command 1
 python, streamlitを使用して、ArduinoとPCのGUI間でJSON形式の通信を行うプログラムを作りたい。
