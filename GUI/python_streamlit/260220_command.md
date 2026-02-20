@@ -12,4 +12,7 @@ python, streamlitを使用して、ArduinoとPCのGUI間でJSON形式の通信�
 - comポートからの受信情報をGUIのテキストエリアに表示する
 
 ## command 2
-現在のファイルを見て、README.mdに概略を追記してください。可能なら全体の構成図も追加してください。
+現在のファイルを見て、README.mdに概略を追記してください。可能なら全体の構成図も追加してください
+
+## command 3
+README.mdを英語にしてください
