@@ -193,3 +193,16 @@ streamlit run app.py
 ## 7. ライセンス
 
 [LICENSE](LICENSE) を参照してください。
+
+
+## exeファイルの作成
+PyInstallerを使用してexeファイルを作成できます。
+
+```powershell
+pyinstaller --onefile --additional-hooks-dir=./hooks run.py --clean
+cp .\run.spec_nkgw_python_env.spec .\run.spec
+pyinstaller run.spec --clean
+cp .\app.py dist/
+cd dist
+./run.exe
+```
