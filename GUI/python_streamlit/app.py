@@ -18,6 +18,7 @@ import serial.tools.list_ports
 import json
 import threading
 import time
+import queue
 
 # ─────────────────────────────────────────────
 # ページ設定
@@ -41,6 +42,7 @@ defaults = {
     "read_thread": None,
     "stop_event": None,
     "led_state": None,     # Arduinoから受け取ったLED状態
+    "data_queue": queue.Queue(),  # スレッドセーフなデータキュー
 }
 for key, val in defaults.items():
     if key not in st.session_state:
@@ -64,7 +66,44 @@ def append_log(message: str):
         st.session_state.received_data = st.session_state.received_data[-200:]
 
 
-def serial_reader(ser: serial.Serial, stop_event: threading.Event):
+def thread_safe_append_log(message: str):
+    """スレッドから安全にログを追加する（キューを使用）"""
+    try:
+        st.session_state.data_queue.put(("log", message))
+    except Exception:
+        # キューが利用できない場合は無視
+        pass
+
+
+def process_data_queue():
+    """メインスレッドでキューからデータを処理する"""
+    if "data_queue" not in st.session_state:
+        return
+    
+    processed_count = 0
+    max_process_per_cycle = 50  # 1サイクルで処理する最大メッセージ数
+    
+    while processed_count < max_process_per_cycle:
+        try:
+            # 非ブロッキングでキューから取得
+            item_type, data = st.session_state.data_queue.get_nowait()
+            
+            if item_type == "log":
+                append_log(data)
+            elif item_type == "led_state":
+                st.session_state.led_state = data
+            
+            processed_count += 1
+        except queue.Empty:
+            # キューが空になったら終了
+            break
+        except Exception as e:
+            # エラーを無視して続行
+            print(f"Error processing queue: {e}")
+            break
+
+
+def serial_reader(ser: serial.Serial, stop_event: threading.Event, data_queue: queue.Queue):
     """
     バックグラウンドスレッドでシリアルデータを読み取る。
     受信した行はセッション状態の received_data に追記する。
@@ -76,21 +115,35 @@ def serial_reader(ser: serial.Serial, stop_event: threading.Event):
                 raw = ser.readline()
                 line = raw.decode("utf-8", errors="replace").strip()
                 if line:
-                    append_log(f"RX: {line}")
+                    # キューを通じてログを追加
+                    try:
+                        data_queue.put(("log", f"RX: {line}"))
+                    except Exception:
+                        pass
                     # JSON解析してled_stateを更新
                     try:
                         data = json.loads(line)
                         if "led_state" in data:
-                            st.session_state.led_state = data["led_state"]
+                            # キューを通じてLED状態を更新
+                            try:
+                                data_queue.put(("led_state", data["led_state"]))
+                            except Exception:
+                                pass
                     except json.JSONDecodeError:
                         pass
         except serial.SerialException as e:
             if not stop_event.is_set():
-                append_log(f"[ERROR] Serial error: {e}")
+                try:
+                    data_queue.put(("log", f"[ERROR] Serial error: {e}"))
+                except Exception:
+                    pass
             break
         except Exception as e:
             if not stop_event.is_set():
-                append_log(f"[ERROR] {e}")
+                try:
+                    data_queue.put(("log", f"[ERROR] {e}"))
+                except Exception:
+                    pass
             break
         time.sleep(0.02)
 
@@ -118,7 +171,7 @@ def do_connect(port: str, baud: int):
     st.session_state.stop_event = stop_event
     t = threading.Thread(
         target=serial_reader,
-        args=(ser, stop_event),
+        args=(ser, stop_event, st.session_state.data_queue),
         daemon=True,
     )
     t.start()
@@ -241,6 +294,9 @@ else:
 # ─────────────────────────────────────────────
 # メインエリア: シリアルモニタ
 # ─────────────────────────────────────────────
+# キューからデータを処理（バックグラウンドスレッドからのデータをメインスレッドで処理）
+process_data_queue()
+
 st.header("📋 シリアルモニタ")
 
 ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 4])
@@ -273,5 +329,7 @@ st.text_area(
 # 接続中は自動更新（0.5秒ごとにリフレッシュ）
 # ─────────────────────────────────────────────
 if st.session_state.connected:
+    # 自動更新前にキューを処理
+    process_data_queue()
     time.sleep(0.5)
     st.rerun()

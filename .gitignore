@@ -436,3 +436,9 @@ GUI/python_streamlit/build/run/run.pkg
 GUI/python_streamlit/build/run/warn-run.txt
 
 GUI/python_streamlit/build/run/xref-run.html
+
+GUI/python_streamlit/streamlit_env/Lib/site-packages/pip-25.0.1.dist-info/
+
+GUI/python_streamlit/streamlit_env/Scripts/
+
+GUI/python_streamlit/streamlit_env/
